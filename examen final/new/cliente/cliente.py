@@ -100,11 +100,6 @@ def on_connect(client, userdata, rc):
     logging.info("Conectado al broker")
 
 # Handler en caso se publique satisfactoriamente en el broker MQTT
-"""
-def on_publish(client, userdata, mid): 
-    publishText = "✓✓"
-    logging.info(publishText)
-"""
 
 #------------------------------------#JDBM Recorre archivo de configuracion----------------------------------------
 def fileRead(fileName):                                                                         
@@ -161,14 +156,12 @@ class ClientManagment:
     def ClientSubsMsg(self):
         client.subscribe(("usuarios/15/"+str(self.user), qos)) 
         client.subscribe(("comandos/15/"+str(self.user), qos)) 
-        #client.subscribe(("audio/15/"+str(self.user), qos)) 
         return
     
     #Funcion para suscribirse a las salas y al topic de audio. Esta funcion se usa cuando se selecciona en el menu
     #la opcion de enviar audio
     def ClientSubsSalas(self):
         client.subscribe(("salas/15/"+str(self.text), qos)) 
-        #client.subscribe(("audio/15/"+str(self.text), qos))  # ELIMINAR 
         return
 
     # PMJO envio de audio convirtiendo la informacion del archivo a bytearray 
@@ -186,17 +179,13 @@ class ClientManagment:
         send = ClientCommands(size, usuario, destinatario)
 
         ClientCommands.PFTR(send)
-        #tcpsocksend()
         return
-    #def getencrip(self):
-        #return self.encrip
 #--------------------------------------------------FIN----------------------------------------------------------
 
 #-----------------------------------------------PMJO------------------------------------------------------------
 # INICIO DE CLIENTE MQTT
 client = mqtt.Client(clean_session=True) 
 client.on_connect = on_connect
-#client.on_publish = on_publish 
 client.username_pw_set(MQTT_USER, MQTT_PASS) 
 client.connect(host=MQTT_HOST, port = MQTT_PORT) 
 
@@ -272,18 +261,8 @@ class Hilos(threading.Thread):
         listOfTopic = strtopic.split('/')
         logging.debug(listOfTopic)
         
-        encriptado = ClientManagment(0,0,0,0)
-        #tipo = encriptado.getencrip()
 
         strmsg = msg.payload
-
-        """
-        if tipo == True:
-            decod = base64.b32decode(strmsg)
-            decod = decod.decode()
-        elif tipo == False:
-            decod = strmsg.decode()
-        """
         decod = strmsg.decode()
   
         listOfText = decod.split('$')          #Divide el mensaje en una lista
@@ -291,7 +270,6 @@ class Hilos(threading.Thread):
         
 
         if 'usuarios' or 'salas' in listOfTopic:
-            #logging.info(strmsg)
             pass
             if str(usuario) not in listOfText:      #Comprueba si el mensaje es enviado por el mismo
                 print('\n'+decod)                  #Imprime el mensaje si esta comprobacion da como resultado false
@@ -322,7 +300,6 @@ class Hilos(threading.Thread):
 
             
             if ACK in listOfText:
-                #print('Se recibio ACK')
                 self.flagAck = True
                 self.H_Alive()
 
@@ -352,12 +329,10 @@ class Hilos(threading.Thread):
                 pass
 
             if cnt == periodAlive:
-                #logging.debug(constdelay)
                 calive = alive + '$' + str(usuario)                 #JDBM:  Comando alive a enviar
                 textoalive = comandosCliente(tcomandos,calive,0)    #JDBM:  Se crea el objeto texto y se le mandan los parametros de
                                                                     #JDBM:  direccion (topic) y el comando
                 textoalive.publicarAlive()                          #JDBM:  Se llama a la funcion publicarAlive del objeto texto para publicar el comando
-                #print('Se envio un ALIVE')
                 ciclo += 1
                 cnt = 0
                 mensaje()
@@ -375,7 +350,6 @@ class Hilos(threading.Thread):
 
                     if flag == True:
                         cnt1 += 1
-                        #logging.debug(cnt1)
                         if cnt1 > 200:
                             logging.critical("NO SE PUDO ESTABLECER CONEXION CON EL SERVIDOR")
                             constdelay = 1
