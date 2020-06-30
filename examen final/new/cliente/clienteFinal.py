@@ -12,6 +12,8 @@ import os
 from brokerData import * 
 import socket
 from globalsV import *
+import base64 #Encriptacion
+import time
 
 
 SERVER_ADDR = '167.71.243.238'
@@ -19,12 +21,39 @@ SERVER_PORT = 9815
 
 BUFFER_SIZE = 8 * 1024 
 
-# JDBM funcion de manejo de audio por medio de hilo
-def audioManage(state,hora):
-    logging.info("Reproduciendo Mensaje de Voz")
-    message = 'aplay '+hora+'.wav'
-    os.system(message)
-    logging.info("Mensaje de Voz reproducido")
+
+class comandosCliente(object):
+    
+    def __init__(self, ctopic, ccomando, cusuario):
+        self.ctopic = ctopic
+        self.ccomando = ccomando
+        self.cusuario = cusuario
+
+    def gettopic(self):
+        return self.ctopic
+
+    def getcomando(self):
+
+        return self.ccomando
+
+    def getusuario(self):
+        return self.cusuario
+
+    def publicarAlive(self):
+        mensaje = self.ccomando.encode()
+        client.publish(self.ctopic + str(usuario), mensaje, qos = 0, retain = False)
+        print('Se envio un ACK')
+        return
+
+    def publicarFTR(self):
+        client.publish(self.ctopic + str(self.cusuario), self.ccomando.encode(), qos = 0, retain = False)  #JDBM En este caso, usuario es el destinantario
+        return
+
+
+
+
+
+
 
 def tcpsockreceive():
     sock = socket.socket()
@@ -32,7 +61,7 @@ def tcpsockreceive():
 
     try:
         buff = sock.recv(BUFFER_SIZE)
-        archivo = open('recibido.mp3', 'wb') #Aca se guarda el archivo entrante
+        archivo = open('recibido.wav', 'wb') #Aca se guarda el archivo entrante
         while buff:
             archivo.write(buff)
             buff = sock.recv(BUFFER_SIZE) #Los bloques se van agregando al archivo
@@ -44,6 +73,9 @@ def tcpsockreceive():
     finally:
         print('Conexion al servidor finalizada')
         sock.close() #Se cierra el socket
+        thread2 = Hilos(2, "Audio", 1, False) #Objeto para inicializar el hilo de Alive
+
+
 
 #------------------------------------------------------------------------------------------------------------------------------V
 def tcpsocksend():
@@ -66,8 +98,13 @@ def tcpsocksend():
 # Configuracion inicial de logging
 logging.basicConfig(
     level = logging.INFO, 
-    format = '[%(levelname)s] (%(threadName)-10s) %(message)s'
+    format = '%(message)s'
     )
+
+#logging.basicConfig(
+    #level = logging.INFO, 
+    #format = '[%(levelname)s] (%(threadName)-10s) %(message)s'
+    #)
 
 # Callback que se ejecuta cuando nos conectamos al broker
 def on_connect(client, userdata, rc):
@@ -80,42 +117,8 @@ def on_connect(client, userdata, rc):
 
 # PMJO - JCAG - JDBM - funcion de recepcion con condicionantes
 # para el manejo corrrecto dependiendo del topico al que llegue el mensaje
-def on_message(client, userdata, msg):
-    
-    strtopic = str(msg.topic)
-    listOfTopic = strtopic.split('/')
-    print(listOfTopic)
-    
-    strmsg = msg.payload                    # JCAG
-    strmsg = strmsg.decode()                #Convierte mensaje en string     
-    listOfText = strmsg.split('$')          #Divide el mensaje en una lista
-    print(listOfText)
-    
-
-    if 'comandos' in listOfTopic:
-
-        if FTR in listOfText:
-
-            print('Se recibio FTR')
-        
-        if ok in listOfText:
-
-            print('Se recibio OK')
-            tcpsocksend()
-
-        if no in listOfText:
-
-            print('Se recibio NO')
-            pass
-
-        if FRR in listOfText:
-            print('Se recibio FRR')
-            tcpsockreceive()
 
 
-    if str(usuario) not in listOfText:      #Comprueba si el mensaje es enviado por el mismo
-        print('\n'+strmsg)                  #Imprime el mensaje si esta comprobacion da como resultado false
-    
 
 #-----------------------------------------------------------------------------------------------------------
 def fileRead(fileName):                                                                         
@@ -138,9 +141,13 @@ class ClientCommands(object):
 
     def PFTR(self):
         if len(self.cdestino)<8:
-            client.publish("comandos/15/"+str(self.cusuario),str(FTR)+"$"+'15'+str(self.cdestino)+"$"+str(self.csize), qos = 0, retain = False)  #JDBM En este caso, usuario es el destinantario
+            #mensajeFTR = str(FTR)+"$"+'15'+str(self.cdestino)+"$"+str(self.csize)
+            #encodeFTR = base64.b32encode(mensajeFTR)
+            client.publish("comandos/15/"+str(self.cusuario), str(FTR)+"$"+'15'+str(self.cdestino)+"$"+str(self.csize), qos = 0, retain = False)  #JDBM En este caso, usuario es el destinantario
         else:
-            client.publish("comandos/15/"+str(self.cusuario),str(FTR)+"$"+str(self.cdestino)+"$"+str(self.csize), qos = 0, retain = False)  #JDBM En este caso, usuario es el destinantario
+            #mensajeFTR2 = str(FTR)+"$"+str(self.cdestino)+"$"+str(self.csize)
+            #encodeFTR2 = base64.b32encode(mensajeFTR2)
+            client.publish("comandos/15/"+str(self.cusuario), str(FTR)+"$"+str(self.cdestino)+"$"+str(self.csize), qos = 0, retain = False)  #JDBM En este caso, usuario es el destinantario
         return
 
 
@@ -158,9 +165,24 @@ class ClientManagment:
     # y el mensaje que se va enviar
     def ClientMessage(self):
         if len(self.destino)<8:
-            client.publish("salas/15/"+str(self.destino), ' '+str(self.user)+' ('+str(self.destino)+')'+' >>>: '+str(self.text) , qos = 0, retain = False)  
-        else:                                                           
-            client.publish("usuarios/15/"+str(self.destino), ' '+str(self.user)+' >>>: '+str(self.text) , qos = 0, retain = False)  
+            """
+            if self.encrip == True:
+                mensajeText = ' '+str(self.user)+' ('+str(self.destino)+')'+' >>>: '+str(self.text)
+                mensajeText = mensajeText.encode()
+                encodeText = base64.b32encode(mensajeText)
+            elif self.encrip == False:
+                encodeText = ' '+str(self.user)+' ('+str(self.destino)+')'+' >>>: '+str(self.text)
+                """
+
+            mensajeText = ' '+str(self.user)+' ('+str(self.destino)+')'+' >>>: '+str(self.text)
+            mensajeText = mensajeText.encode()
+            encodeText = base64.b32encode(mensajeText)
+            client.publish("salas/15/"+str(self.destino), encodeText, qos = 0, retain = False)  
+        else:
+            mensajeText = ' '+str(self.user)+' >>>: '+str(self.text)
+            mensajeText = mensajeText.encode()
+            encodeText2 = base64.b32encode(mensajeText)                
+            client.publish("usuarios/15/"+str(self.destino), encodeText2, qos = 0, retain = False)  
         return
 
     #Funcion para suscribirse a un topic, se suscribe con el usuario al que se envia, esta funcion se usa cuando 
@@ -195,6 +217,8 @@ class ClientManagment:
         ClientCommands.PFTR(send)
         #tcpsocksend()
         return
+    #def getencrip(self):
+        #return self.encrip
 
 #-------------------------------------------------------------------------------------------------------------------------------------A 
 # PMJO
@@ -202,7 +226,7 @@ class ClientManagment:
 client = mqtt.Client(clean_session=True) 
 client.on_connect = on_connect
 #client.on_publish = on_publish 
-client.on_message = on_message 
+#client.on_message = on_message 
 client.username_pw_set(MQTT_USER, MQTT_PASS) 
 client.connect(host=MQTT_HOST, port = MQTT_PORT) 
 
@@ -243,11 +267,185 @@ client.loop_start()
 #El thread de MQTT queda en el fondo, mientras en el main loop hacemos otra cosa
 #------------------------------------------------------------------------------------------------------------  
 
+
+
+
+
+
+
+
+
+
+class Hilos(threading.Thread):
+    def __init__(self, threadID, name, delay, daemon):
+      threading.Thread.__init__(self)
+      self.threadID = threadID
+      self.name = name
+      self.delay = delay
+      self.flagAck = False
+      
+      # Create new threads
+      threading.Thread.start(self)
+
+      client.on_message = self.mensaje
+      
+
+    def run(self):
+      print ("Starting " + self.name)
+      if self.threadID == 1:
+             return self.H_Alive()
+      print ("Exiting " + self.name)
+
+      if self.threadID == 2:
+             return self.audioManage()
+      print ("Exiting " + self.name)
+
+    def mensaje(self, client, userdata, msg):
+
+
+        strtopic = str(msg.topic)
+        listOfTopic = strtopic.split('/')
+        logging.debug(listOfTopic)
+        
+        encriptado = ClientManagment(0,0,0,0)
+        #tipo = encriptado.getencrip()
+
+        strmsg = msg.payload
+        """
+        if tipo == True:
+            decod = base64.b32decode(strmsg)
+            decod = decod.decode()
+        elif tipo == False:
+            decod = strmsg.decode()
+        """
+        decod = strmsg.decode()
+  
+        listOfText = decod.split('$')          #Divide el mensaje en una lista
+        logging.debug(listOfText)
+        print(listOfText)
+
+        
+
+        if 'usuarios' or 'salas' in listOfTopic:
+            #logging.info(strmsg)
+            pass
+            if str(usuario) not in listOfText:      #Comprueba si el mensaje es enviado por el mismo
+                print('\n'+decod)                  #Imprime el mensaje si esta comprobacion da como resultado false
+       
+
+
+       
+
+        if 'comandos' in listOfTopic:
+
+            if FTR in listOfText:
+
+                print('Se recibio FTR')
+            
+            if ok in listOfText:
+
+                print('Se recibio OK')
+                tcpsocksend()
+
+
+            if no in listOfText:
+
+                print('Se recibio NO')
+                pass
+
+            if FRR in listOfText:
+                print('Se recibio FRR')
+                tcpsockreceive()
+
+            
+            if ACK in listOfText:
+                #print('Se recibio ACK')
+                self.flagAck = True
+                self.H_Alive()
+
+
+        if str(usuario) not in listOfText:      #Comprueba si el mensaje es enviado por el mismo
+            pass
+            print('\n'+strmsg)                  #Imprime el mensaje si esta comprobacion da como resultado false
+        
+
+
+    
+
+
+
+    def H_Alive(self):
+        cnt = 0
+        cnt1 = 0
+        ciclo = 0
+        flag = False
+        constdelay = 1
+        periodAlive = 2
+        contadorACKS = 0
+        while True:
+
+            #JDBM mensaje de alive
+            
+            cnt += 1
+            logging.debug(constdelay)
+
+            
+            if self.flagAck == True:
+                contadorACKS += 1
+            else:
+                pass
+
+            if cnt == periodAlive:
+                #logging.debug(constdelay)
+                calive = alive + '$' + str(usuario)                 #JDBM:  Comando alive a enviar
+                textoalive = comandosCliente(tcomandos,calive,0)    #JDBM:  Se crea el objeto texto y se le mandan los parametros de
+                                                                    #JDBM:  direccion (topic) y el comando
+                textoalive.publicarAlive()                          #JDBM:  Se llama a la funcion publicarAlive del objeto texto para publicar el comando
+                #print('Se envio un ALIVE')
+                ciclo += 1
+                cnt = 0
+                mensaje()
+
+                if ciclo == 3:
+                    if contadorACKS > 1:
+                        contadorACKS = 0
+                        ciclo = 0
+                        flag = False
+                    elif contadorACKS == 0:
+                        periodAlive = 1
+                        constdelay = 0.1
+                        flag = True
+                        ciclo = 0
+
+                    if flag == True:
+                        cnt1 += 1
+                        #logging.debug(cnt1)
+                        if cnt1 > 200:
+                            logging.critical("NO SE PUDO ESTABLECER CONEXION CON EL SERVIDOR")
+                            constdelay = 1
+                            cnt1 = 0
+                            flag = False
+                            time.sleep(1)
+                    elif flag == False:
+                        pass
+
+            time.sleep(self.delay*constdelay) #JDBM Delay en segundos
+
+        # JDBM funcion de manejo de audio por medio de hilo
+    def audioManage(self):
+        logging.info("Reproduciendo Mensaje de Voz")
+        message = 'aplay recibido.wav'
+        os.system(message)
+        logging.info("Mensaje de Voz reproducido")
+
+thread1 = Hilos(1, "Alive", 1, False) #Objeto para inicializar el hilo de Alive
+
+
 try:    
     while True:     #Este codigo lo ejecutamos siempre para mantener el menu constante y seleccionar entre texto, audio
                     # ingresar la duracion del audio, salirse del chat, etc.
         
-        formato = input("(Audio/Texto): ")                                                                                             
+        formato = input("(Audio/Texto): ")                                                                                            
         destinatario = input("Destino(2016xxxxx/S00): ")    
         pase = True                                                                     
                                                                                                                         
@@ -259,7 +457,13 @@ try:
                 else:
                     #Al haber guardado los datos ingresados por el usuario, se usan los datos de usuario, destinatario y mensaje
                     #para enviarlos a los topics ingresados y publicarlos por MQTT
-                    send=ClientManagment(usuario,destinatario,mensaje,0)   
+
+                    opcion = input("¿Desea encriptar su mensaje?(si/no) ")  
+                    if opcion == 'si' or opcion == 'Si':
+                        flagg = True
+                    elif opcion == 'no' or opcion == 'No':
+                        flagg = False
+                    send=ClientManagment(usuario,destinatario,mensaje,0)  
                     ClientManagment.ClientMessage(send)
 
                     #JCAGA | JDBM
@@ -273,8 +477,15 @@ try:
 #----------------------------------------------------------------------------------------------------------------------------
 
 except KeyboardInterrupt:
-    logging.warning("\nDesconectando del broker...")
-
+    
+    logging.info("Terminando hilos")
+    
+    try:
+        if thread1.is_alive():
+            thread1._stop()
+    except DeprecationWarning:
+        'Usuario desconectado'
+    
 finally:
     client.loop_stop() #Se mata el hilo que verifica los topics en el fondo
     client.disconnect() #Se desconecta del broker
