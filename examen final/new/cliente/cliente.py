@@ -15,12 +15,14 @@ from globalsV import *
 import base64 #Encriptacion
 import time
 
-
+#Datos para conectarse al socket
 SERVER_ADDR = '167.71.243.238'
 SERVER_PORT = 9815
 
 BUFFER_SIZE = 8 * 1024 
 
+
+#---------------------------------------JDBM CLASE PARA PUBLICAR ALIVE---------------------------------------------
 
 class comandosCliente(object):
     
@@ -42,19 +44,11 @@ class comandosCliente(object):
     def publicarAlive(self):
         mensaje = self.ccomando.encode()
         client.publish(self.ctopic + str(usuario), mensaje, qos = 0, retain = False)
-        print('Se envio un ACK')
         return
-
-    def publicarFTR(self):
-        client.publish(self.ctopic + str(self.cusuario), self.ccomando.encode(), qos = 0, retain = False)  #JDBM En este caso, usuario es el destinantario
-        return
+#----------------------------------------------------FIN-----------------------------------------------------------
 
 
-
-
-
-
-
+#-----------------------------------JCGA FUNCION PARA RECIBIR EL AUDIO POR TCP-------------------------------------
 def tcpsockreceive():
     sock = socket.socket()
     sock.connect((SERVER_ADDR, SERVER_PORT))
@@ -77,7 +71,7 @@ def tcpsockreceive():
 
 
 
-#------------------------------------------------------------------------------------------------------------------------------V
+#-------------------------------------JCGA FUNCION PARA ENVIAR EL AUDIO POR TCP-------------------------------------
 def tcpsocksend():
     sock = socket.socket()
     sock.connect((SERVER_ADDR, SERVER_PORT))
@@ -93,7 +87,7 @@ def tcpsocksend():
 
         print('Conexion al servidor finalizada')
         sock.close() #Se cierra el socket
-#------------------------------------------------------------------------------------------------------------------------------A    
+#------------------------------------------------------FIN--------------------------------------------------------   
 
 # Configuracion inicial de logging
 logging.basicConfig(
@@ -101,37 +95,30 @@ logging.basicConfig(
     format = '%(message)s'
     )
 
-#logging.basicConfig(
-    #level = logging.INFO, 
-    #format = '[%(levelname)s] (%(threadName)-10s) %(message)s'
-    #)
-
 # Callback que se ejecuta cuando nos conectamos al broker
 def on_connect(client, userdata, rc):
     logging.info("Conectado al broker")
 
 # Handler en caso se publique satisfactoriamente en el broker MQTT
-#def on_publish(client, userdata, mid): 
-#    publishText = "✓✓"
-#    logging.info(publishText)
+"""
+def on_publish(client, userdata, mid): 
+    publishText = "✓✓"
+    logging.info(publishText)
+"""
 
-# PMJO - JCAG - JDBM - funcion de recepcion con condicionantes
-# para el manejo corrrecto dependiendo del topico al que llegue el mensaje
-
-
-
-#-----------------------------------------------------------------------------------------------------------
+#------------------------------------#JDBM Recorre archivo de configuracion----------------------------------------
 def fileRead(fileName):                                                                         
     archivo = open(fileName,'r') #Abrir el archivo en modo de LECTURA                                              
-    data = []                                                                                               #|JDBM
+    data = []                                                                                               
     for linea in archivo: #Leer cada linea del archivo                                                      
-        registro = linea.split(',')                                                                         #|Recorre archivo de configuracion    
+        registro = linea.split(',')                                                                             
         data.append(registro)                                                                               
     archivo.close() #Cerrar el archivo al finalizar                                                         
     return data      
 
-#-----------------------------------------------------------------------------------------------------------
+#--------------------------------------------------FIN------------------------------------------------------------
 
+#----------------------------------------------#JCGA CLASE PARA MANEJAR COMANDOS----------------------------------
 class ClientCommands(object):
     
     def __init__(self, csize , cusuario, cdestino):
@@ -141,19 +128,14 @@ class ClientCommands(object):
 
     def PFTR(self):
         if len(self.cdestino)<8:
-            #mensajeFTR = str(FTR)+"$"+'15'+str(self.cdestino)+"$"+str(self.csize)
-            #encodeFTR = base64.b32encode(mensajeFTR)
             client.publish("comandos/15/"+str(self.cusuario), str(FTR)+"$"+'15'+str(self.cdestino)+"$"+str(self.csize), qos = 0, retain = False)  #JDBM En este caso, usuario es el destinantario
         else:
-            #mensajeFTR2 = str(FTR)+"$"+str(self.cdestino)+"$"+str(self.csize)
-            #encodeFTR2 = base64.b32encode(mensajeFTR2)
             client.publish("comandos/15/"+str(self.cusuario), str(FTR)+"$"+str(self.cdestino)+"$"+str(self.csize), qos = 0, retain = False)  #JDBM En este caso, usuario es el destinantario
         return
 
 
-#-------------------------------------------------------------------------------------------------------------------------------------
-# JCAG
-#Clase para el manejo del cliente
+#--------------------------------------#PMJO Clase para el manejo del cliente--------------------------------------
+
 class ClientManagment:
     def __init__(self, user, destino,  text, fsize):
         self.user = user
@@ -165,24 +147,13 @@ class ClientManagment:
     # y el mensaje que se va enviar
     def ClientMessage(self):
         if len(self.destino)<8:
-            """
-            if self.encrip == True:
-                mensajeText = ' '+str(self.user)+' ('+str(self.destino)+')'+' >>>: '+str(self.text)
-                mensajeText = mensajeText.encode()
-                encodeText = base64.b32encode(mensajeText)
-            elif self.encrip == False:
-                encodeText = ' '+str(self.user)+' ('+str(self.destino)+')'+' >>>: '+str(self.text)
-                """
 
-            mensajeText = ' '+str(self.user)+' ('+str(self.destino)+')'+' >>>: '+str(self.text)
-            mensajeText = mensajeText.encode()
-            encodeText = base64.b32encode(mensajeText)
-            client.publish("salas/15/"+str(self.destino), encodeText, qos = 0, retain = False)  
-        else:
-            mensajeText = ' '+str(self.user)+' >>>: '+str(self.text)
-            mensajeText = mensajeText.encode()
-            encodeText2 = base64.b32encode(mensajeText)                
-            client.publish("usuarios/15/"+str(self.destino), encodeText2, qos = 0, retain = False)  
+            client.publish("salas/15/"+str(self.destino), ' '+str(self.user)+' ('+str(self.destino)+')'+' >>>: '+str(self.text), qos = 0, retain = False)  
+
+        else:     
+
+            client.publish("usuarios/15/"+str(self.destino), ' '+str(self.user)+' >>>: '+str(self.text), qos = 0, retain = False)  
+        
         return
 
     #Funcion para suscribirse a un topic, se suscribe con el usuario al que se envia, esta funcion se usa cuando 
@@ -219,28 +190,27 @@ class ClientManagment:
         return
     #def getencrip(self):
         #return self.encrip
+#--------------------------------------------------FIN----------------------------------------------------------
 
-#-------------------------------------------------------------------------------------------------------------------------------------A 
-# PMJO
+#-----------------------------------------------PMJO------------------------------------------------------------
 # INICIO DE CLIENTE MQTT
 client = mqtt.Client(clean_session=True) 
 client.on_connect = on_connect
 #client.on_publish = on_publish 
-#client.on_message = on_message 
 client.username_pw_set(MQTT_USER, MQTT_PASS) 
 client.connect(host=MQTT_HOST, port = MQTT_PORT) 
 
 qos = 0
 
-#-----------------------------------------------------------------------------------------------------------
+#------------------------PMJO Subscricion topics de archivo de configuracion-----------------------------------
 
 #Se lee el archivo de usuarios, para usar el carne que esta en el archivo                      
 subs = fileRead('usuarios')                                                                   
 subs = subs[0]                                                                               
 usuario = subs[0]          
-usuario = usuario.strip()                                                                      #|PMJO
+usuario = usuario.strip()                                                                      
 del subs[0]                                                                                                     
-#Subscripcion simple con tupla (topic,qos)                                                     #|Subscricion topics de archivo de configuracion
+#Subscripcion simple con tupla (topic,qos)                                                     
 #Se crea el objeto send de la clase ClienteManagment
 send = ClientManagment(usuario,0,0,0)
 ClientManagment.ClientSubsMsg(send)     
@@ -262,19 +232,14 @@ for i in newsubs:
     send = ClientManagment(0,0,i,0)                                                                                          
     ClientManagment.ClientSubsSalas(send)                                                       
                                                                                                             
-#------------------------------------------------------------------------------------------------------------
+#--------------------------------------------------FIN-------------------------------------------------------
+
 client.loop_start()
 #El thread de MQTT queda en el fondo, mientras en el main loop hacemos otra cosa
+
 #------------------------------------------------------------------------------------------------------------  
 
-
-
-
-
-
-
-
-
+#-------------------------JDBM CLASE PARA EL MANEJO DE HILOS DE AUDIO, ALIVE Y ON_MESSAGE---------------------
 
 class Hilos(threading.Thread):
     def __init__(self, threadID, name, delay, daemon):
@@ -284,21 +249,21 @@ class Hilos(threading.Thread):
       self.delay = delay
       self.flagAck = False
       
-      # Create new threads
       threading.Thread.start(self)
 
       client.on_message = self.mensaje
       
 
+    #AFUERA SE INSTANCIAN LOS OBJETOS QUE DAN LOS PARAMETROS PARA CONFIGURAR LOS HILOS
     def run(self):
-      print ("Starting " + self.name)
+      print ("Empezando " + self.name)
       if self.threadID == 1:
              return self.H_Alive()
-      print ("Exiting " + self.name)
+      print ("Saliendo " + self.name)
 
       if self.threadID == 2:
              return self.audioManage()
-      print ("Exiting " + self.name)
+      print ("Saliendo " + self.name)
 
     def mensaje(self, client, userdata, msg):
 
@@ -311,6 +276,7 @@ class Hilos(threading.Thread):
         #tipo = encriptado.getencrip()
 
         strmsg = msg.payload
+
         """
         if tipo == True:
             decod = base64.b32decode(strmsg)
@@ -321,8 +287,6 @@ class Hilos(threading.Thread):
         decod = strmsg.decode()
   
         listOfText = decod.split('$')          #Divide el mensaje en una lista
-        logging.debug(listOfText)
-        print(listOfText)
 
         
 
@@ -331,9 +295,8 @@ class Hilos(threading.Thread):
             pass
             if str(usuario) not in listOfText:      #Comprueba si el mensaje es enviado por el mismo
                 print('\n'+decod)                  #Imprime el mensaje si esta comprobacion da como resultado false
-       
-
-
+                publishText = "✓✓"
+                logging.info(publishText)
        
 
         if 'comandos' in listOfTopic:
@@ -369,12 +332,7 @@ class Hilos(threading.Thread):
             print('\n'+strmsg)                  #Imprime el mensaje si esta comprobacion da como resultado false
         
 
-
-    
-
-
-
-    def H_Alive(self):
+    def H_Alive(self): #HILO DE ALIVE
         cnt = 0
         cnt1 = 0
         ciclo = 0
@@ -384,8 +342,6 @@ class Hilos(threading.Thread):
         contadorACKS = 0
         while True:
 
-            #JDBM mensaje de alive
-            
             cnt += 1
             logging.debug(constdelay)
 
@@ -438,19 +394,23 @@ class Hilos(threading.Thread):
         os.system(message)
         logging.info("Mensaje de Voz reproducido")
 
+#--------------------------------------------------FIN-------------------------------------------------------
+
 thread1 = Hilos(1, "Alive", 1, False) #Objeto para inicializar el hilo de Alive
 
+#------------------------ JCGA BUCLE PARA EL INGRESO DE COMANDOS, TEXTO Y MANEJO DEL MENU --------------------------
 
 try:    
     while True:     #Este codigo lo ejecutamos siempre para mantener el menu constante y seleccionar entre texto, audio
                     # ingresar la duracion del audio, salirse del chat, etc.
-        
+        time.sleep(2)
         formato = input("(Audio/Texto): ")                                                                                            
         destinatario = input("Destino(2016xxxxx/S00): ")    
         pase = True                                                                     
                                                                                                                         
         if formato == 'Texto' or formato =='texto':                                                 #Interfaz de usuario primera version
-            while pase:                                                                                             #JCGA   
+            while pase:           
+                time.sleep(2)                                                                                  #JCGA   
                 mensaje = input("Tu: ")        
                 if mensaje == 'salir':
                     pase = False     
@@ -458,11 +418,6 @@ try:
                     #Al haber guardado los datos ingresados por el usuario, se usan los datos de usuario, destinatario y mensaje
                     #para enviarlos a los topics ingresados y publicarlos por MQTT
 
-                    opcion = input("¿Desea encriptar su mensaje?(si/no) ")  
-                    if opcion == 'si' or opcion == 'Si':
-                        flagg = True
-                    elif opcion == 'no' or opcion == 'No':
-                        flagg = False
                     send=ClientManagment(usuario,destinatario,mensaje,0)  
                     ClientManagment.ClientMessage(send)
 
@@ -474,7 +429,7 @@ try:
             ClientManagment.ClientAudio(send, duracionIn, destinatario)
             #logging.info('Enviando audio')
                                                                                                  
-#----------------------------------------------------------------------------------------------------------------------------
+#--------------------------------------------------------FIN-----------------------------------------------------------------
 
 except KeyboardInterrupt:
     
